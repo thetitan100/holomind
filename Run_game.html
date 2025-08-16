@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMind - Kris Run</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-color: #00ffff;
+            --background-color: #000000;
+            --text-color: #f0f0f0;
+            --hud-frame-color: rgba(0, 255, 255, 0.4);
+            --danger-color: #ff3b3b;
+            --deltarune-font: 'VT323', monospace;
+            --ui-font: 'Orbitron', sans-serif;
+        }
+        body {
+            font-family: var(--deltarune-font);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            overflow: hidden;
+        }
+        #game-wrapper {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .parallax-bg {
+            position: absolute;
+            top: 0; left: 0; width: 200%; height: 100%;
+            background-repeat: repeat-x;
+            background-position: 0 0;
+            z-index: -1;
+        }
+        #bg-stars {
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0idHJhbnNwYXJlbnQiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjUwIiByPSIxIiBmaWxsPSIjMDBmZmZmIiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIxMDAiIHI9IjIiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxNTAiIGN5PSIyMDAiIHI9IjEiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIyNTAiIGN5PSIyNTAiIHI9IjEiIGZpbGw9IiMwMGZmZmYiLz48L3N2Zz4=');
+            animation: scroll-stars 60s linear infinite;
+        }
+        #bg-city-far {
+             background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MDAgMjAwIj48cGF0aCBmaWxsPSIjMDAxRDI1IiBkPSJNMCAyMDBWMTIwTDUwIDExMEwxMDAgMTMwTDE1MCAxMjVMMjAwIDE0MEwyNTAgMTM1TDMyMCAxNTBMMzgwIDE0MEw0NTAgMTYwTDUwMCAxNTB MNTgwIDE3MEw2NTAgMTYwTDcwMCAxODBMODAwIDE3MFYyMDBaIi8+PC9zdmc+');
+             animation: scroll-city-far 40s linear infinite;
+        }
+        #bg-city-near {
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MDAgMjAwIj48cGF0aCBmaWxsPSIjMDAzMzREIiBkPSJNMCAyMDBWMTUwTDQwIDE0NUwxMDAgMTU1wxNzAgMTUwTDI1MCAxNjBMMzMwIDE1NUw0MDAgMTcwTDQ4MCAxNjVMNTUwIDE4MEw2MjAgMTc1TDcwMCAxOTBMODAwIDE4NVYyMDBaIi8+PC9zdmc+');
+            animation: scroll-city-near 20s linear infinite;
+        }
+        @keyframes scroll-stars { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes scroll-city-far { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes scroll-city-near { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+
+        canvas {
+            position: absolute; top: 0; left: 0;
+            display: block; width: 100%; height: 100%;
+            image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
+        }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            font-family: var(--ui-font); z-index: 5;
+        }
+        .overlay h1 { font-size: 4rem; color: var(--neon-color); text-shadow: 0 0 15px var(--neon-color); letter-spacing: 4px; }
+        .overlay h2 { font-size: 2rem; margin-bottom: 1rem; }
+        .overlay p { font-size: 1.5rem; margin-top: 1rem; font-family: var(--deltarune-font); }
+        #score {
+            position: absolute; top: 20px; left: 30px;
+            font-family: var(--ui-font); font-size: 2.5rem;
+            color: var(--neon-color); text-shadow: 0 0 10px var(--neon-color); z-index: 5;
+        }
+        #controls-container { position: absolute; top: 20px; right: 20px; display: flex; gap: 1rem; z-index: 5;}
+        .control-btn {
+            width: 140px; padding: 0.8rem; font-family: var(--ui-font); font-size: 1.1rem;
+            color: var(--neon-color); background-color: rgba(0,0,0,0.5); border: 2px solid var(--neon-color);
+            border-radius: 0.5rem; cursor: pointer; transition: all 0.2s;
+            text-shadow: 0 0 8px var(--neon-color); position: relative; overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        .control-btn:hover { background-color: var(--neon-color); color: var(--background-color); box-shadow: 0 0 20px var(--neon-color); text-shadow: none; }
+        #boost-btn.cooldown::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 59, 59, 0.5); animation: cooldown-animation 3s linear;
+        }
+        @keyframes cooldown-animation { from { width: 100%; } to { width: 0%; } }
+        
+        .char-select-container { display: flex; gap: 2rem; margin-top: 2rem; }
+        .char-card { border: 2px solid var(--hud-frame-color); border-radius: 1rem; padding: 1.5rem; cursor: pointer; transition: all 0.3s; }
+        .char-card:hover { border-color: var(--neon-color); background-color: var(--hud-frame-color); transform: scale(1.1); }
+        .char-card p { font-size: 2rem; }
+        #highscore-container { width: 80%; max-width: 500px; }
+        #highscore-list { list-style: none; padding: 0; margin-top: 1rem; font-size: 1.5rem; width: 100%;}
+        #highscore-list li { display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px dashed var(--hud-frame-color); }
+        #highscore-list li span:nth-child(2) { color: var(--neon-color); }
+        #reset-scores-btn { margin-top: 1.5rem; font-size: 1rem; padding: 0.5rem 1rem; }
+
+        #name-input-container { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+        #name-slots { display: flex; gap: 1rem; }
+        .letter-slot { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+        .letter { font-size: 4rem; width: 80px; text-align: center; border-bottom: 2px solid var(--neon-color); }
+        .arrow { cursor: pointer; font-size: 2rem; user-select: none; }
+        .arrow:hover { color: var(--neon-color); }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <div id="bg-stars" class="parallax-bg"></div>
+        <div id="bg-city-far" class="parallax-bg"></div>
+        <div id="bg-city-near" class="parallax-bg"></div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="score">0</div>
+        <div id="controls-container">
+            <button id="jump-btn" class="control-btn">SALTAR</button>
+            <button id="boost-btn" class="control-btn">BOOST</button>
+        </div>
+        
+        <div id="name-input-screen" class="overlay">
+            <h1>INGRESA TU APODO</h1>
+            <div id="name-input-container">
+                <div id="name-slots">
+                    <div class="letter-slot"><div class="arrow up">▲</div><div class="letter" id="letter-0">A</div><div class="arrow down">▼</div></div>
+                    <div class="letter-slot"><div class="arrow up">▲</div><div class="letter" id="letter-1">A</div><div class="arrow down">▼</div></div>
+                    <div class="letter-slot"><div class="arrow up">▲</div><div class="letter" id="letter-2">A</div><div class="arrow down">▼</div></div>
+                </div>
+                <button id="confirm-name-btn" class="control-btn" style="width: 200px; margin-top: 1rem;">CONFIRMAR</button>
+            </div>
+        </div>
+
+        <div id="character-select-screen" class="overlay" style="display: none;">
+            <h1>ELIGE TU PERSONAJE</h1>
+            <div class="char-select-container">
+                <div class="char-card" data-char="kris"><p>KRIS</p></div>
+                <div class="char-card" data-char="susie"><p>SUSIE</p></div>
+                <div class="char-card" data-char="ralsei"><p>RALSEI</p></div>
+            </div>
+        </div>
+
+        <div id="start-screen" class="overlay" style="display: none;">
+            <h1 id="char-title">KRIS RUN</h1>
+            <p id="loading-text">Cargando...</p>
+            <p id="start-text" style="display: none;">Presiona Espacio o el botón Saltar para Empezar</p>
+        </div>
+
+        <div id="game-over-screen" class="overlay" style="display: none;">
+            <h1>JUEGO TERMINADO</h1>
+            <div id="highscore-container">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem;">
+                    <h2>MEJORES PUNTUACIONES</h2>
+                    <button id="reset-scores-btn" class="control-btn" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.8rem;">REINICIAR</button>
+                </div>
+                <ol id="highscore-list"></ol>
+            </div>
+            <div id="game-over-controls" style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                 <button id="play-again-btn" class="control-btn">JUGAR OTRA VEZ</button>
+                 <button id="change-char-btn" class="control-btn">CAMBIAR PERSONAJE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const nameInputScreen = document.getElementById('name-input-screen');
+        const charSelectScreen = document.getElementById('character-select-screen');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const highscoreList = document.getElementById('highscore-list');
+        const loadingText = document.getElementById('loading-text');
+        const startText = document.getElementById('start-text');
+        const jumpBtn = document.getElementById('jump-btn');
+        const boostBtn = document.getElementById('boost-btn');
+        const charTitle = document.getElementById('char-title');
+        const confirmNameBtn = document.getElementById('confirm-name-btn');
+        const resetScoresBtn = document.getElementById('reset-scores-btn');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const changeCharBtn = document.getElementById('change-char-btn');
+
+        let player, gravity, obstacles, gameSpeed, score;
+        let isPlaying = false, isGameOver = false, assetsLoaded = 0, totalAssets = 0;
+        let isBoosting = false, boostCooldown = 3000, boostDuration = 1000, canBoost = true;
+        let playerName = "AAA";
+        let nextSpawnThreshold = 0;
+        let hasSpawnedFirstFalling = false;
+        
+        const characters = {
+            kris: {
+                paths: [
+                    './personajes/kris/spr_krisr_dark_0.png', 
+                    './personajes/kris/spr_krisr_dark_1.png',
+                    './personajes/kris/spr_krisr_dark_2.png',
+                    './personajes/kris/spr_krisr_dark_3.png'
+                ],
+                w: 48 * 1.3, h: 64 * 1.3
+            },
+            susie: {
+                paths: [
+                    './personajes/susie/spr_susie_walk_right_look_down_dw_0.png', 
+                    './personajes/susie/spr_susie_walk_right_look_down_dw_1.png',
+                    './personajes/susie/spr_susie_walk_right_look_down_dw_2.png',
+                    './personajes/susie/spr_susie_walk_right_look_down_dw_3.png'
+                ],
+                w: 64 * 1.3, h: 72 * 1.3
+            },
+            ralsei: {
+                paths: [
+                    './personajes/ralsei/spr_ralsei_surprised_right_walk_0.png',
+                    './personajes/ralsei/spr_ralsei_surprised_right_walk_1.png',
+                    './personajes/ralsei/spr_ralsei_surprised_right_walk_2.png',
+                    './personajes/ralsei/spr_ralsei_surprised_right_walk_3.png'
+                ],
+                w: 48 * 1.3, h: 60 * 1.3
+            }
+        };
+        let selectedChar = 'kris';
+        let playerSprites = [];
+
+        const obstacleAssets = {
+            rock1: { src: './objetos/piedra/roca.jpg', img: null, w: 40 * 1.4, h: 40 * 1.4 },
+            rock2: { src: './objetos/piedra/rock.png', img: null, w: 40 * 1.4, h: 40 * 1.4 },
+            falling1: { src: './objetos/caida/spr_dw_teevie_statue_0.png', img: null, w: 64 * 1.4, h: 64 * 1.4 },
+            falling2: { src: './objetos/caida/spr_dw_tvland_preview_vending_0.png', img: null, w: 64 * 1.4, h: 64 * 1.4 },
+            fire: {
+                paths: [
+                    './objetos/fuego/spr_hearthflame_0.png',
+                    './objetos/fuego/spr_hearthflame_1.png',
+                    './objetos/fuego/spr_hearthflame_2.png',
+                    './objetos/fuego/spr_hearthflame_3.png',
+                    './objetos/fuego/spr_hearthflame_4.png'
+                ],
+                sprites: [], w: 32 * 1.4, h: 32 * 1.4
+            },
+        };
+
+        function checkAllAssetsLoaded() {
+            assetsLoaded++;
+            if (assetsLoaded === totalAssets) {
+                loadingText.style.display = 'none';
+                startText.style.display = 'block';
+            }
+        }
+
+        function preloadAssets() {
+            assetsLoaded = 0;
+            playerSprites = [];
+            const spritePaths = characters[selectedChar].paths;
+            
+            totalAssets = spritePaths.filter(p => p !== '').length;
+            for (const key in obstacleAssets) {
+                if (obstacleAssets[key].paths) {
+                    totalAssets += obstacleAssets[key].paths.filter(p => p !== '').length;
+                } else if (obstacleAssets[key].src !== '') {
+                    totalAssets++;
+                }
+            }
+
+            if (spritePaths.length === 0) { loadingText.textContent = "Sprites no definidos."; return; }
+            spritePaths.forEach((src) => {
+                if(src === '') return;
+                const img = new Image();
+                img.onload = checkAllAssetsLoaded;
+                img.onerror = () => { loadingText.textContent = `Error: ${src}`; };
+                img.src = src;
+                playerSprites.push(img);
+            });
+
+            for (const key in obstacleAssets) {
+                const asset = obstacleAssets[key];
+                if (asset.paths) {
+                    asset.sprites = [];
+                    asset.paths.forEach(path => {
+                        if (path === '') return;
+                        const img = new Image();
+                        img.onload = checkAllAssetsLoaded;
+                        img.onerror = () => { loadingText.textContent = `Error: ${path}`; };
+                        img.src = path;
+                        asset.sprites.push(img);
+                    });
+                } else {
+                    if (asset.src === '') continue;
+                    asset.img = new Image();
+                    asset.img.onload = checkAllAssetsLoaded;
+                    asset.img.onerror = () => { loadingText.textContent = `Error: ${asset.src}`; };
+                    asset.img.src = asset.src;
+                }
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Player {
+            constructor(x, y, w, h) {
+                this.x = x; this.y = y; this.w = w; this.h = h;
+                this.dy = 0; this.jumpForce = 18; this.grounded = false;
+                this.currentFrame = 0; this.animationSpeed = 6; this.frameCount = 0;
+                this.hitboxPadding = { x: this.w * 0.2, y: this.h * 0.1 };
+            }
+            animate() {
+                this.frameCount++;
+                const speed = isBoosting ? this.animationSpeed / 2 : this.animationSpeed;
+                if (this.frameCount > speed) {
+                    this.frameCount = 0;
+                    this.currentFrame = (this.currentFrame + 1) % playerSprites.length;
+                }
+            }
+            draw() {
+                if (playerSprites.length > 0 && playerSprites[this.currentFrame]?.complete) {
+                    ctx.drawImage(playerSprites[this.currentFrame], this.x, this.y, this.w, this.h);
+                }
+            }
+            jump() { if (this.grounded) { this.dy = -this.jumpForce; this.grounded = false; } }
+            update() {
+                this.animate();
+                if (!this.grounded) { this.dy += gravity; }
+                this.y += this.dy;
+                if (this.y + this.h >= canvas.height - 40) {
+                    this.y = canvas.height - this.h - 40; this.dy = 0; this.grounded = true;
+                }
+                this.draw();
+            }
+        }
+
+        class Obstacle {
+            constructor(x, y, w, h, type, asset) {
+                this.x = x; this.y = y; this.w = w; this.h = h; this.type = type;
+                this.asset = asset;
+                this.dy = (type === 'falling') ? 2 + Math.random() * 2 : 0;
+                this.isAnimated = Array.isArray(asset);
+                if (this.isAnimated) {
+                    this.sprites = asset; this.currentFrame = 0;
+                    this.animationSpeed = 10; this.frameCount = 0;
+                }
+                this.hitboxPadding = { x: this.w * 0.15, y: this.h * 0.15 };
+            }
+            animate() {
+                if (!this.isAnimated) return;
+                this.frameCount++;
+                if (this.frameCount > this.animationSpeed) {
+                    this.frameCount = 0;
+                    this.currentFrame = (this.currentFrame + 1) % this.sprites.length;
+                }
+            }
+            draw() {
+                const imageToDraw = this.isAnimated ? this.sprites[this.currentFrame] : this.asset;
+                if (imageToDraw && imageToDraw.complete) {
+                    ctx.drawImage(imageToDraw, this.x, this.y, this.w, this.h);
+                }
+            }
+            update() {
+                this.x -= gameSpeed;
+                if (this.type === 'falling') { this.y += this.dy; }
+                if (this.isAnimated) { this.animate(); }
+                this.draw();
+            }
+        }
+
+        function spawnObstacle() {
+            let availableGround = ['fire'];
+            let availableAir = [];
+            if (score > 1000) availableAir.push('rock1', 'rock2');
+            
+            let fallingProb = 0;
+            if (score > 2500 && !hasSpawnedFirstFalling) {
+                fallingProb = 1; // 100% de probabilidad la primera vez
+                hasSpawnedFirstFalling = true;
+            } else if (score > 2500) {
+                fallingProb = 0.01 + ((score - 2500) / 20000); 
+                if (fallingProb > 0.1) fallingProb = 0.1;
+            }
+
+            const spawnFalling = Math.random() < fallingProb;
+            const spawnAir = Math.random() < 0.4;
+            let typeKey;
+
+            if (spawnFalling) {
+                 typeKey = ['falling1', 'falling2'][Math.floor(Math.random() * 2)];
+            } else if (spawnAir && availableAir.length > 0) {
+                typeKey = availableAir[Math.floor(Math.random() * availableAir.length)];
+            } else {
+                typeKey = 'fire';
+            }
+            
+            let obstacle;
+            const assetData = obstacleAssets[typeKey];
+            const isGround = availableGround.includes(typeKey);
+            const isAir = availableAir.includes(typeKey);
+
+            if (isGround) {
+                const asset = assetData.sprites;
+                if (!asset || (Array.isArray(asset) && asset.length === 0)) return;
+                obstacle = new Obstacle(canvas.width + assetData.w, canvas.height - assetData.h - 40, assetData.w, assetData.h, 'ground', asset);
+                
+                if (score > 1000 && Math.random() < 0.3) {
+                    const secondFire = new Obstacle(obstacle.x + assetData.w + 20, canvas.height - assetData.h - 40, assetData.w, assetData.h, 'ground', asset);
+                    obstacles.push(secondFire);
+                }
+
+            } else if (isAir) {
+                if (!assetData.img) return;
+                const charData = characters[selectedChar];
+                const yPos = canvas.height - 40 - charData.h - assetData.h - 15;
+                obstacle = new Obstacle(canvas.width + assetData.w, yPos, assetData.w, assetData.h, 'air', assetData.img);
+            } else { // Falling
+                if (!assetData.img) return;
+                const charData = characters[selectedChar];
+                obstacle = new Obstacle(player.x + 200 + Math.random() * (canvas.width - 300), -charData.h, charData.w, charData.h, 'falling', assetData.img);
+            }
+            if (obstacle) {
+                obstacles.push(obstacle);
+                let minSpacing = 400;
+                let maxSpacing = 700;
+                if (score > 1000) { minSpacing = 300; maxSpacing = 500; }
+                if (score > 2500) { minSpacing = 250; maxSpacing = 450; }
+                const randomSpacing = Math.random() * (maxSpacing - minSpacing) + minSpacing;
+                nextSpawnThreshold = canvas.width - randomSpacing;
+            }
+        }
+
+        function init() {
+            const charData = characters[selectedChar];
+            player = new Player(80, canvas.height - 100, charData.w, charData.h);
+            gravity = 1; obstacles = []; gameSpeed = 7; score = 0;
+            isGameOver = false; canBoost = true;
+            nextSpawnThreshold = 0;
+            hasSpawnedFirstFalling = false;
+            scoreElement.innerText = "0";
+            gameOverScreen.style.display = 'none';
+            startScreen.style.display = 'none';
+            charSelectScreen.style.display = 'none';
+            nameInputScreen.style.display = 'none';
+            isPlaying = true;
+            requestAnimationFrame(update);
+        }
+
+        function update() {
+            if (!isPlaying || isGameOver) return;
+            requestAnimationFrame(update);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, canvas.height - 40); ctx.lineTo(canvas.width, canvas.height - 40); ctx.stroke();
+
+            player.update();
+
+            if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < nextSpawnThreshold) {
+                spawnObstacle();
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let o = obstacles[i];
+                o.update();
+                
+                const pbox = { x: player.x + player.hitboxPadding.x, y: player.y + player.hitboxPadding.y, w: player.w - 2 * player.hitboxPadding.x, h: player.h - 2 * player.hitboxPadding.y };
+                const obox = { x: o.x + o.hitboxPadding.x, y: o.y + o.hitboxPadding.y, w: o.w - 2 * o.hitboxPadding.x, h: o.h - 2 * o.hitboxPadding.y };
+
+                if (pbox.x < obox.x + obox.w && pbox.x + pbox.w > obox.x &&
+                    pbox.y < obox.y + obox.h && pbox.y + pbox.h > obox.y) {
+                    gameOver();
+                }
+                if (o.x + o.w < 0 || o.y > canvas.height) obstacles.splice(i, 1);
+            }
+
+            score += Math.floor(gameSpeed / 6);
+            scoreElement.innerText = score;
+            if (score % 200 === 0 && score > 0) gameSpeed += 0.2;
+        }
+
+        function gameOver() {
+            isGameOver = true; isPlaying = false;
+            saveHighScore(playerName, score);
+            displayHighScores();
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        function activateBoost() {
+            if (!canBoost || !isPlaying) return;
+            isBoosting = true; canBoost = false;
+            const originalSpeed = gameSpeed;
+            gameSpeed *= 2.5;
+            boostBtn.classList.add('cooldown');
+            setTimeout(() => { isBoosting = false; gameSpeed = originalSpeed; }, boostDuration);
+            setTimeout(() => { canBoost = true; boostBtn.classList.remove('cooldown'); }, boostCooldown);
+        }
+
+        function saveHighScore(name, newScore) {
+            const highScores = JSON.parse(localStorage.getItem('holomindHighScores')) || [];
+            highScores.push({ name, score: newScore });
+            highScores.sort((a, b) => b.score - a.score);
+            localStorage.setItem('holomindHighScores', JSON.stringify(highScores.slice(0, 10)));
+        }
+
+        function displayHighScores() {
+            const highScores = JSON.parse(localStorage.getItem('holomindHighScores')) || [];
+            highscoreList.innerHTML = '';
+            if (highScores.length === 0) {
+                highscoreList.innerHTML = '<li><span>Aún no hay puntuaciones</span></li>';
+            } else {
+                highScores.forEach((s, i) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>#${i + 1} ${s.name}</span><span style="color:var(--neon-color)">${s.score}</span>`;
+                    highscoreList.appendChild(li);
+                });
+            }
+        }
+        
+        document.querySelectorAll('.char-card').forEach(card => {
+            card.addEventListener('click', () => {
+                selectedChar = card.dataset.char;
+                charTitle.textContent = `${selectedChar.toUpperCase()} RUN`;
+                charSelectScreen.style.display = 'none';
+                startScreen.style.display = 'flex';
+                preloadAssets();
+            });
+        });
+
+        function handleInput(type) {
+             if (assetsLoaded < totalAssets && isPlaying) return;
+             if (!isPlaying && !isGameOver) { init(); return; }
+             if (type === 'jump') player.jump();
+             if (type === 'boost') activateBoost();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                if (startScreen.style.display !== 'none') {
+                    handleInput('jump');
+                } else if (!isGameOver) {
+                    handleInput('jump');
+                }
+            }
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') handleInput('boost');
+        });
+
+        jumpBtn.addEventListener('click', () => {
+            if (startScreen.style.display !== 'none') {
+                handleInput('jump');
+            } else {
+                handleInput('jump');
+            }
+        });
+        boostBtn.addEventListener('click', () => handleInput('boost'));
+        startScreen.addEventListener('mousedown', () => handleInput('jump'));
+        
+        playAgainBtn.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            startText.style.display = 'block';
+            loadingText.style.display = 'none';
+            isGameOver = false; 
+        });
+
+        changeCharBtn.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            charSelectScreen.style.display = 'flex';
+            isGameOver = false; 
+        });
+
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let currentName = ['A', 'A', 'A'];
+        const letterElements = [document.getElementById('letter-0'), document.getElementById('letter-1'), document.getElementById('letter-2')];
+
+        document.querySelectorAll('.arrow').forEach(arrow => {
+            arrow.addEventListener('click', (e) => {
+                const slotIndex = parseInt(e.target.parentElement.querySelector('.letter').id.split('-')[1]);
+                let charIndex = letters.indexOf(currentName[slotIndex]);
+                if (e.target.classList.contains('up')) {
+                    charIndex = (charIndex + 1) % letters.length;
+                } else {
+                    charIndex = (charIndex - 1 + letters.length) % letters.length;
+                }
+                currentName[slotIndex] = letters[charIndex];
+                letterElements[slotIndex].textContent = currentName[slotIndex];
+            });
+        });
+
+        confirmNameBtn.addEventListener('click', () => {
+            playerName = currentName.join('');
+            nameInputScreen.style.display = 'none';
+            charSelectScreen.style.display = 'flex';
+        });
+
+        resetScoresBtn.addEventListener('click', () => {
+            localStorage.removeItem('holomindHighScores');
+            displayHighScores();
+        });
+
+    </script>
+</body>
+</html>
