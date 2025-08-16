@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMind - Desafío Matemático (HUD v2)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-color: #00ffff;
+            --background-color: #000000;
+            --text-color: #f0f0f0;
+            --danger-color: #ff3b3b;
+            --warning-color: #ffcc00;
+            --success-color: #34c759;
+            --hud-frame-color: rgba(0, 255, 255, 0.4);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+        
+        h1, h2, h3 { font-family: 'Orbitron', sans-serif; }
+
+        .hud-frame {
+            border: 1px solid var(--hud-frame-color);
+            border-radius: 1.5rem;
+            background-color: transparent;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            position: relative;
+        }
+        .hud-frame::before, .hud-frame::after {
+            content: ''; position: absolute; width: 30px; height: 30px;
+            border-color: var(--neon-color); border-style: solid;
+        }
+        .hud-frame::before { top: -2px; left: -2px; border-width: 2px 0 0 2px; border-top-left-radius: 1.5rem; }
+        .hud-frame::after { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; border-bottom-right-radius: 1.5rem; }
+
+        .problem-display {
+            border: 1px solid var(--hud-frame-color); border-radius: 1rem;
+            background: linear-gradient(rgba(0, 255, 255, 0.05), rgba(0, 255, 255, 0.1));
+        }
+        #problem { text-shadow: 0 0 8px var(--neon-color); }
+
+        #answers-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 1rem;
+            width: 100%;
+            max-width: 450px;
+            margin: auto;
+        }
+
+        .answer-btn {
+            border-radius: 0.75rem; border: 1px solid var(--hud-frame-color);
+            background: transparent; color: var(--text-color);
+            transition: all 0.2s ease-in-out; font-family: 'Orbitron', sans-serif;
+            position: relative;
+        }
+        .answer-btn:hover, .answer-btn:focus {
+            background: var(--neon-color); color: var(--background-color);
+            border-color: var(--neon-color); box-shadow: 0 0 20px var(--neon-color);
+        }
+        .answer-btn::before {
+            content: ''; position: absolute; width: 10px; height: 10px;
+            border-color: var(--neon-color); border-style: solid;
+            top: 5px; left: 5px; border-width: 1px 0 0 1px;
+            transition: all 0.2s ease-in-out;
+        }
+        .answer-btn:hover::before, .answer-btn:focus::before { border-color: var(--background-color); }
+
+        .pos-up    { grid-column: 2; grid-row: 1; }
+        .pos-left  { grid-column: 1; grid-row: 2; }
+        .pos-right { grid-column: 3; grid-row: 2; }
+        .pos-down  { grid-column: 2; grid-row: 3; }
+
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        #time-bar-container { background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .icon { font-family: 'Orbitron', sans-serif; margin-right: 0.5rem; color: var(--neon-color); }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- Asegúrate de poner la ruta correcta a tu archivo de música de 25 segundos -->
+    <audio id="game-music" src="/music/Escalera.mp3"></audio> 
+
+    <div id="game-wrapper" class="w-full max-w-2xl mx-auto">
+        <!-- Pantalla de Inicio -->
+        <div id="start-screen" class="hud-frame p-8 sm:p-12 text-center">
+            <h1 class="text-4xl sm:text-5xl font-black text-white mb-3" style="text-shadow: 0 0 10px var(--neon-color);">Desafío Matemático</h1>
+            <p class="text-slate-300 mb-10 max-w-md mx-auto">Demuestra tu agilidad mental y alcanza la puntuación más alta.</p>
+            <button id="start-btn" class="answer-btn font-bold py-4 px-8 text-xl w-full max-w-xs mx-auto">
+                Comenzar
+            </button>
+        </div>
+
+        <!-- Pantalla de Juego -->
+        <div id="game-screen" class="hidden hud-frame p-6 sm:p-8 flex flex-col h-[90vh] max-h-[700px]">
+            <div class="flex justify-between items-center mb-4 font-semibold">
+                <span id="level-display" class="text-lg flex items-center"><span class="icon">✪</span>Nivel: 1</span>
+                <span id="time-display" class="text-lg flex items-center"><span class="icon">◷</span>Tiempo: 2:00</span>
+            </div>
+            <div id="time-bar-container" class="w-full rounded-full h-3 mb-6 overflow-hidden">
+                <div id="time-bar" class="h-3 rounded-full transition-all duration-1000 linear" style="background-color: var(--neon-color);"></div>
+            </div>
+            
+            <div id="problem-container" class="problem-display my-4 py-6">
+                <p id="problem" class="text-center text-4xl sm:text-5xl font-bold text-white"></p>
+            </div>
+
+            <div id="answers-container" class="flex-grow"></div>
+        </div>
+
+        <!-- Modal de Resultados -->
+        <div id="results-screen" class="hidden fixed inset-0 modal-backdrop flex items-center justify-center p-4">
+            <div class="hud-frame p-8 text-center w-full max-w-lg">
+                <h2 class="text-3xl font-bold text-white mb-4">¡Juego Terminado!</h2>
+                <p class="text-slate-300 mb-6">Este es el análisis de tu partida.</p>
+                <div id="score-breakdown" class="problem-display p-6 my-6 text-left space-y-4"></div>
+                <p class="text-sm font-semibold text-slate-300 mt-6">PUNTUACIÓN FINAL</p>
+                <p id="final-score" class="text-7xl font-black" style="color: var(--neon-color); text-shadow: 0 0 15px var(--neon-color);">0</p>
+                <button id="restart-btn" class="answer-btn w-full max-w-xs mx-auto mt-8 font-bold py-3 px-6 text-lg">
+                    Jugar de Nuevo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const timeBar = document.getElementById('time-bar');
+        const timeDisplay = document.getElementById('time-display');
+        const levelDisplay = document.getElementById('level-display');
+        const problemContainer = document.getElementById('problem-container');
+        const problemElement = document.getElementById('problem');
+        const answersContainer = document.getElementById('answers-container');
+        const scoreBreakdownContainer = document.getElementById('score-breakdown');
+        const gameMusic = document.getElementById('game-music');
+        
+        let level, totalScore, correctAnswers, incorrectAnswers, timer, timeLeft, correctAnswerValue;
+        let correctAnswersByLevel = {};
+        let consecutiveIncorrectAnswers = 0;
+        let totalPenalties = 0; // NUEVO: Contador de penalizaciones
+        const initialTime = 120;
+
+        function initGame() {
+            level = 1; totalScore = 0; correctAnswers = 0; incorrectAnswers = 0;
+            timeLeft = initialTime;
+            correctAnswersByLevel = {};
+            consecutiveIncorrectAnswers = 0;
+            totalPenalties = 0; // Reiniciar contador de penalizaciones
+            
+            startScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+
+            if (gameMusic.src && gameMusic.src !== window.location.href) {
+                gameMusic.currentTime = 0;
+                gameMusic.playbackRate = 1.0;
+                gameMusic.play();
+            }
+
+            updateTimerDisplay();
+            timer = setInterval(updateTimer, 1000);
+            generateProblem();
+        }
+
+        function updateTimer() {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) endGame();
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timeDisplay.innerHTML = `<span class="icon">◷</span>Tiempo: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            const timePercentage = (timeLeft / initialTime) * 100;
+            timeBar.style.width = `${timePercentage}%`;
+            
+            if (timeLeft <= 20) {
+                timeBar.style.backgroundColor = 'var(--danger-color)';
+            } else if (timeLeft <= 45) {
+                timeBar.style.backgroundColor = 'var(--warning-color)';
+            } else {
+                timeBar.style.backgroundColor = 'var(--neon-color)';
+            }
+
+            if (gameMusic.src && gameMusic.src !== window.location.href) {
+                const minSpeed = 1.0;
+                const maxSpeed = 1.5;
+                const progress = (initialTime - timeLeft) / initialTime;
+                gameMusic.playbackRate = minSpeed + (progress * (maxSpeed - minSpeed));
+            }
+        }
+
+        function generateProblem() {
+            levelDisplay.innerHTML = `<span class="icon">✪</span>Nivel: ${level}`;
+            problemContainer.classList.remove('animation-popIn');
+            void problemContainer.offsetWidth;
+            problemContainer.classList.add('animation-popIn');
+
+            let problemPool = [];
+            switch (level) {
+                case 1: problemPool = ['simple_add_sub']; break;
+                case 2: problemPool = ['simple_add_sub', 'simple_mult']; break;
+                case 3: problemPool = ['simple_mult', 'simple_div']; break;
+                case 4: problemPool = ['compound_mult', 'compound_div']; break;
+                case 5: problemPool = ['compound_div', 'power']; break;
+                case 6: problemPool = ['power', 'root']; break;
+                default: problemPool = ['advanced_compound', 'root_compound']; break;
+            }
+            const chosenType = problemPool[Math.floor(Math.random() * problemPool.length)];
+
+            switch (chosenType) {
+                case 'simple_add_sub': generateSimpleProblem(false); break;
+                case 'simple_mult': generateSimpleProblem(true); break;
+                case 'simple_div': generateSimpleProblem(true, true); break;
+                case 'compound_mult': generateCompoundProblem(); break;
+                case 'compound_div': generateDivisionCompoundProblem(); break;
+                case 'power': generatePowerProblem(); break;
+                case 'root': generateRootProblem(); break;
+                case 'advanced_compound': generateAdvancedCompoundProblem(); break;
+                case 'root_compound': generateRootCompoundProblem(); break;
+                default: generateSimpleProblem(false); break;
+            }
+            generateAnswersUI();
+        }
+        
+        function generateSimpleProblem(allowMult = false, allowDiv = false) {
+            const baseOps = ['+', '-'];
+            if(allowMult) baseOps.push('*');
+            if(allowDiv) baseOps.push('/');
+            const op = baseOps[Math.floor(Math.random() * baseOps.length)];
+            const numRange = level >= 4 ? 15 : 8;
+            let num1, num2, problemText;
+            switch (op) {
+                case '+':
+                    num1 = Math.floor(Math.random() * (level * numRange)) + 1;
+                    num2 = Math.floor(Math.random() * (level * numRange)) + 1;
+                    correctAnswerValue = num1 + num2; problemText = `${num1} + ${num2}`;
+                    break;
+                case '-':
+                    num1 = Math.floor(Math.random() * (level * numRange)) + 5;
+                    num2 = Math.floor(Math.random() * num1) + 1;
+                    correctAnswerValue = num1 - num2; problemText = `${num1} - ${num2}`;
+                    break;
+                case '*':
+                    num1 = Math.floor(Math.random() * (level + 5)) + 2;
+                    num2 = Math.floor(Math.random() * 9) + 2;
+                    correctAnswerValue = num1 * num2; problemText = `${num1} × ${num2}`;
+                    break;
+                case '/':
+                    num2 = Math.floor(Math.random() * (level + 3)) + 2;
+                    correctAnswerValue = Math.floor(Math.random() * 9) + 2;
+                    num1 = correctAnswerValue * num2; problemText = `${num1} ÷ ${num2}`;
+                    break;
+            }
+            problemElement.textContent = problemText;
+        }
+        function generateCompoundProblem() {
+            const numRange = level >= 4 ? 15 : 10;
+            const num1 = Math.floor(Math.random() * numRange) + 1;
+            const num2 = Math.floor(Math.random() * numRange) + 2;
+            const num3 = Math.floor(Math.random() * (level > 4 ? 10 : 5)) + 2;
+            if (Math.random() < 0.5) {
+                problemElement.textContent = `${num1} + ${num2} × ${num3}`;
+                correctAnswerValue = num1 + (num2 * num3);
+            } else {
+                problemElement.textContent = `${num1} × ${num2} - ${num3}`;
+                correctAnswerValue = (num1 * num2) - num3;
+            }
+        }
+        function generateDivisionCompoundProblem() {
+            const numRange = level >= 4 ? 12 : 8;
+            const b = Math.floor(Math.random() * numRange) + 2;
+            const c = Math.floor(Math.random() * numRange) + 2;
+            const a = b * c;
+            const d = Math.floor(Math.random() * 20) + 1;
+            if (Math.random() < 0.5) {
+                problemElement.textContent = `(${a} ÷ ${b}) + ${d}`;
+                correctAnswerValue = c + d;
+            } else {
+                correctAnswerValue = c - d;
+                if (correctAnswerValue < 0) {
+                    problemElement.textContent = `${d} + (${a} ÷ ${b})`;
+                    correctAnswerValue = d + c;
+                } else {
+                    problemElement.textContent = `(${a} ÷ ${b}) - ${d}`;
+                }
+            }
+        }
+        function generatePowerProblem() {
+            const numRange = level >= 4 ? 12 : 8;
+            const a = Math.floor(Math.random() * numRange) + 2;
+            const b = Math.floor(Math.random() * numRange) + 2;
+            problemElement.textContent = `${a}² + ${b}`;
+            correctAnswerValue = (a * a) + b;
+        }
+        function generateRootProblem() {
+            const numRange = level >= 4 ? 12 : 8;
+            const a = Math.floor(Math.random() * numRange) + 2;
+            const b = Math.floor(Math.random() * numRange) + 2;
+            const aSquared = a * a;
+            problemElement.textContent = `√${aSquared} + ${b}`;
+            correctAnswerValue = a + b;
+        }
+        function generateAdvancedCompoundProblem() {
+            const numRange = level >= 4 ? 15 : 10;
+            const a = Math.floor(Math.random() * numRange) + 2;
+            const b = Math.floor(Math.random() * numRange) + 2;
+            const c = Math.floor(Math.random() * 8) + 2;
+            const cSquared = c * c;
+            problemElement.textContent = `(${a} × ${b}) - ${c}²`;
+            correctAnswerValue = (a * b) - cSquared;
+        }
+        function generateRootCompoundProblem() {
+            const b = Math.floor(Math.random() * 10) + 2;
+            const c = Math.floor(Math.random() * 10) + 2;
+            const aRoot = Math.floor(Math.random() * 10) + 2;
+            const a = aRoot * aRoot;
+            if (Math.random() < 0.5) {
+                problemElement.textContent = `(√${a} + ${b}) × ${c}`;
+                correctAnswerValue = (aRoot + b) * c;
+            } else {
+                const dRoot = Math.floor(Math.random() * 8) + 2;
+                const d = dRoot * dRoot;
+                const e = Math.floor(Math.random() * 12) + 1;
+                problemElement.textContent = `(${e} × √${d}) - ${b}`;
+                correctAnswerValue = (e * dRoot) - b;
+            }
+        }
+
+        function generateAnswersUI() {
+            let answers = new Set([correctAnswerValue]);
+            while (answers.size < 4) {
+                const offset = (Math.floor(Math.random() * 8) + 1) * (Math.random() < 0.5 ? 1 : -1);
+                let wrongAnswer = correctAnswerValue + offset;
+                if (wrongAnswer < 0) wrongAnswer = Math.abs(wrongAnswer) + 1;
+                if (wrongAnswer !== correctAnswerValue && !isNaN(wrongAnswer)) answers.add(wrongAnswer);
+            }
+
+            const shuffledAnswers = Array.from(answers).sort(() => Math.random() - 0.5);
+            answersContainer.innerHTML = '';
+            const positions = ['pos-up', 'pos-left', 'pos-right', 'pos-down'];
+
+            shuffledAnswers.forEach((answer, index) => {
+                const button = document.createElement('button');
+                button.textContent = answer;
+                button.classList.add('answer-btn', 'font-bold', 'py-5', 'sm:py-6', 'text-2xl', 'sm:text-3xl', positions[index]);
+                button.onclick = () => checkAnswer(answer, button);
+                answersContainer.appendChild(button);
+            });
+        }
+
+        function checkAnswer(selectedAnswer, button) {
+            Array.from(answersContainer.children).forEach(btn => btn.disabled = true);
+            if (selectedAnswer === correctAnswerValue) {
+                correctAnswers++;
+                consecutiveIncorrectAnswers = 0;
+                totalScore += (level + 4);
+                if (!correctAnswersByLevel[level]) correctAnswersByLevel[level] = 0;
+                correctAnswersByLevel[level]++;
+                
+                level = Math.floor(correctAnswers / 3) + 1;
+                button.style.borderColor = 'var(--success-color)';
+                button.style.color = 'var(--success-color)';
+                button.style.boxShadow = '0 0 15px var(--success-color)';
+            } else {
+                incorrectAnswers++;
+                consecutiveIncorrectAnswers++;
+
+                if (consecutiveIncorrectAnswers === 3) {
+                    totalScore -= 6;
+                    totalPenalties++; // Incrementar contador de penalizaciones
+                    consecutiveIncorrectAnswers = 0;
+                    console.log("Penalización: -6 puntos por 3 errores seguidos.");
+                }
+
+                button.style.borderColor = 'var(--danger-color)';
+                button.style.color = 'var(--danger-color)';
+                button.style.boxShadow = '0 0 15px var(--danger-color)';
+            }
+            setTimeout(() => { generateProblem(); }, 500);
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            if(gameMusic.src) gameMusic.pause();
+            
+            const totalQuestions = correctAnswers + incorrectAnswers;
+            const accuracyFactor = totalQuestions > 0 ? (correctAnswers / totalQuestions) : 0;
+            const finalScore = Math.round(totalScore * accuracyFactor);
+
+            displayResults(finalScore, accuracyFactor);
+            gameScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+        }
+
+        function displayResults(finalScore, accuracyFactor) {
+            document.getElementById('final-score').textContent = finalScore;
+            
+            let breakdownHTML = `<div class="text-sm text-slate-300 space-y-3">`;
+            breakdownHTML += `<p class="font-semibold text-white">Puntos por Nivel:</p><ul class="list-disc list-inside pl-2 space-y-1">`;
+            if (Object.keys(correctAnswersByLevel).length === 0) {
+                breakdownHTML += `<li>No hubo aciertos.</li>`;
+            } else {
+                for (const lvl in correctAnswersByLevel) {
+                    const points = correctAnswersByLevel[lvl] * (parseInt(lvl) + 4);
+                    breakdownHTML += `<li>Nivel ${lvl}: ${correctAnswersByLevel[lvl]} aciertos <span class="font-bold text-white">(+${points} pts)</span></li>`;
+                }
+            }
+            breakdownHTML += `</ul>`;
+
+            // NUEVO: Mostrar penalizaciones si existen
+            if (totalPenalties > 0) {
+                const penaltyPoints = totalPenalties * 6;
+                breakdownHTML += `<p class="font-semibold text-red-500 mt-2">Penalizaciones: <span class="font-bold">-${penaltyPoints} pts</span></p>`;
+            }
+
+            breakdownHTML += `<p class="font-bold text-right mt-2">Total Base: ${totalScore} pts</p>`;
+            
+            const accuracyPercentage = (accuracyFactor * 100).toFixed(1);
+            breakdownHTML += `<hr class="my-3 border-slate-700"><p class="font-semibold text-white">Multiplicador de Precisión:</p><ul class="list-disc list-inside pl-2">`;
+            breakdownHTML += `<li>${correctAnswers} de ${correctAnswers + incorrectAnswers} aciertos <span class="font-bold text-white">(${accuracyPercentage}%)</span></li></ul>`;
+            
+            breakdownHTML += `<div class="mt-4 pt-3 border-t border-slate-700 text-center text-xs text-slate-400">
+                <p><span class="font-bold">${totalScore}</span> (base) × <span class="font-bold">${accuracyPercentage}%</span> (precisión) = <span class="font-bold text-lg" style="color:var(--neon-color)">${finalScore}</span></p>
+            </div></div>`;
+
+            scoreBreakdownContainer.innerHTML = breakdownHTML;
+        }
+
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', () => {
+            resultsScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        });
+
+        gameMusic.addEventListener('timeupdate', function(){
+            if (!this.src || this.src === window.location.href || this.duration === 0) return;
+            const buffer = 0.5; 
+            if(this.currentTime > this.duration - buffer){
+                this.currentTime = 0;
+                this.play();
+            }
+        });
+
+    </script>
+</body>
+</html>

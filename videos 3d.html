@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMind - Visor de Modelos 3D (Fullscreen)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-color: #00ffff;
+            --background-color: #000000;
+            --text-color: #f0f0f0;
+            --hud-frame-color: rgba(0, 255, 255, 0.4);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Contenedor principal que ocupa toda la pantalla */
+        #main-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Marco HUD principal ajustado a pantalla completa */
+        .hud-frame {
+            border: 1px solid var(--hud-frame-color);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            position: absolute;
+            top: 1rem;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            border-radius: 1rem;
+        }
+        .hud-frame::before, .hud-frame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-color: var(--neon-color);
+            border-style: solid;
+        }
+        .hud-frame::before {
+            top: -1px;
+            left: -1px;
+            border-width: 2px 0 0 2px;
+            border-top-left-radius: 1rem;
+        }
+        .hud-frame::after {
+            bottom: -1px;
+            right: -1px;
+            border-width: 0 2px 2px 0;
+            border-bottom-right-radius: 1rem;
+        }
+
+        /* Contenedor del visor de video */
+        #video-viewer {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-color: #000000;
+            overflow: hidden;
+        }
+
+        #video-viewer video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none; /* Ocultos por defecto */
+        }
+
+        #video-viewer video.active {
+            display: block; /* Solo el video activo es visible */
+        }
+
+        /* Botones de navegación superpuestos */
+        .nav-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--hud-frame-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.3s, box-shadow 0.3s;
+            z-index: 10;
+        }
+        .nav-arrow:hover {
+            background-color: var(--neon-color);
+            box-shadow: 0 0 20px var(--neon-color);
+        }
+        .nav-arrow svg {
+            width: 25px;
+            height: 25px;
+            transition: fill 0.3s;
+        }
+        .nav-arrow:hover svg {
+            fill: var(--background-color);
+        }
+
+        #prev-btn { left: 2.5rem; }
+        #next-btn { right: 2.5rem; }
+
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        
+        <!-- Botón de Anterior -->
+        <button id="prev-btn" class="nav-arrow">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#00ffff"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+
+        <!-- Contenedor principal del visor -->
+        <div class="hud-frame">
+            <div id="video-viewer">
+                <!-- Aquí se generarán los videos con JavaScript -->
+            </div>
+        </div>
+
+        <!-- Botón de Siguiente -->
+        <button id="next-btn" class="nav-arrow">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#00ffff"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </button>
+        
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        // ¡IMPORTANTE! Reemplaza estos nombres con las rutas a tus 10 archivos de video.
+        const videoFiles = [
+            "./videos_3d/fish.mp4", "./videos_3d/miku.mp4", "./videos_3d/tiburon", "modelo4.mp4", "modelo5.mp4",
+
+            "modelo6.mp4", "modelo7.mp4", "modelo8.mp4", "modelo9.mp4", "modelo10.mp4"
+        ];
+        // Para demostración, usaremos un video de ejemplo.
+        // const videoFiles = Array(10).fill("https://www.w3schools.com/html/mov_bbb.mp4");
+
+        // --- ELEMENTOS DEL DOM ---
+        const videoViewer = document.getElementById('video-viewer');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+
+        // --- ESTADO DEL VISOR ---
+        let currentVideoIndex = 0;
+        let videoElements = [];
+
+        // --- INICIALIZACIÓN ---
+        function initializeViewer() {
+            videoFiles.forEach((src) => {
+                const video = document.createElement('video');
+                video.src = src;
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.preload = "auto";
+                videoViewer.appendChild(video);
+                videoElements.push(video);
+            });
+            updateVideoDisplay();
+        }
+
+        // --- LÓGICA DE NAVEGACIÓN ---
+        function updateVideoDisplay() {
+            videoElements.forEach((video) => {
+                video.classList.remove('active');
+                if (!video.paused) {
+                    video.pause();
+                }
+            });
+
+            const currentVideo = videoElements[currentVideoIndex];
+            currentVideo.classList.add('active');
+            currentVideo.play().catch(error => {
+                console.log("El autoplay fue bloqueado por el navegador.", error);
+            });
+        }
+
+        // Event Listeners para los botones
+        nextBtn.addEventListener('click', () => {
+            currentVideoIndex = (currentVideoIndex + 1) % videoFiles.length;
+            updateVideoDisplay();
+        });
+
+        prevBtn.addEventListener('click', () => {
+            currentVideoIndex = (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
+            updateVideoDisplay();
+        });
+
+        // Iniciar el visor cuando la página cargue
+        document.addEventListener('DOMContentLoaded', initializeViewer);
+
+    </script>
+</body>
+</html>
