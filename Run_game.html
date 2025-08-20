@@ -19,10 +19,27 @@
         }
         body {
             font-family: var(--deltarune-font);
-            background-color: var(--background-color);
+            background-image: url('./fondo_juego/spr_mansion_ferris_wheel_bg_0.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            animation: backgroundMove 30s linear infinite;
             color: var(--text-color);
             margin: 0;
+            padding: 0;
             overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #game-wrapper {
+            background: rgba(0, 0, 0, 0.1); /* Overlay sutil para mejor contraste */
+        }
+        
+        @keyframes backgroundMove {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
         }
         #game-wrapper {
             position: fixed;
@@ -59,7 +76,12 @@
         canvas {
             position: absolute; top: 0; left: 0;
             display: block; width: 100%; height: 100%;
-            image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
+            image-rendering: pixelated; 
+            image-rendering: -moz-crisp-edges; 
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: -o-crisp-edges;
+            -ms-interpolation-mode: nearest-neighbor;
         }
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -88,6 +110,10 @@
         #boost-btn.cooldown::after {
             content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(255, 59, 59, 0.5); animation: cooldown-animation 3s linear;
+        }
+        #attack-btn.cooldown::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 59, 59, 0.5); animation: cooldown-animation 0.5s linear;
         }
         @keyframes cooldown-animation { from { width: 100%; } to { width: 0%; } }
         
@@ -120,6 +146,7 @@
         <div id="controls-container">
             <button id="jump-btn" class="control-btn">SALTAR</button>
             <button id="boost-btn" class="control-btn">BOOST</button>
+            <button id="attack-btn" class="control-btn">GOLPE</button>
         </div>
         
         <div id="name-input-screen" class="overlay">
@@ -178,6 +205,7 @@
         const startText = document.getElementById('start-text');
         const jumpBtn = document.getElementById('jump-btn');
         const boostBtn = document.getElementById('boost-btn');
+        const attackBtn = document.getElementById('attack-btn');
         const charTitle = document.getElementById('char-title');
         const confirmNameBtn = document.getElementById('confirm-name-btn');
         const resetScoresBtn = document.getElementById('reset-scores-btn');
@@ -187,41 +215,83 @@
         let player, gravity, obstacles, gameSpeed, score;
         let isPlaying = false, isGameOver = false, assetsLoaded = 0, totalAssets = 0;
         let isBoosting = false, boostCooldown = 3000, boostDuration = 1000, canBoost = true;
+        let isAttacking = false, attackCooldown = 1400, canAttack = true, attackRange = 80;
+        let attackAnimationFrame = 0;
+        let attackAnimationTime = 0;
+        let attackDuration = 1000; // 1 segundo
         let playerName = "AAA";
         let nextSpawnThreshold = 0;
         let hasSpawnedFirstFalling = false;
+        let destroyedObstacles = [];
+        
+        // Variables para efecto de fondo en movimiento
+        let backgroundLines = [];
+        let backgroundOffset = 0;
         
         const characters = {
             kris: {
-                paths: [
+                walk: [
                     './personajes/kris/spr_krisr_dark_0.png', 
                     './personajes/kris/spr_krisr_dark_1.png',
                     './personajes/kris/spr_krisr_dark_2.png',
                     './personajes/kris/spr_krisr_dark_3.png'
                 ],
-                w: 48 * 1.3, h: 64 * 1.3
+                attack: [
+                    './personajes/kris_ataque/spr_krisb_attackready_0.png',
+                    './personajes/kris_ataque/spr_krisb_attack_0.png',
+                    './personajes/kris_ataque/spr_krisb_attack_1.png',
+                    './personajes/kris_ataque/spr_krisb_attack_2.png',
+                    './personajes/kris_ataque/spr_krisb_attack_3.png',
+                    './personajes/kris_ataque/spr_krisb_attack_4.png',
+                    './personajes/kris_ataque/spr_krisb_attack_5.png',
+                    './personajes/kris_ataque/spr_krisb_attack_6.png'
+                ],
+                w: 48 * 1.3, h: 64 * 1.3,
+                attackW: 48 * 2.8, attackH: 64 * 2.8
             },
             susie: {
-                paths: [
+                walk: [
                     './personajes/susie/spr_susie_walk_right_look_down_dw_0.png', 
                     './personajes/susie/spr_susie_walk_right_look_down_dw_1.png',
                     './personajes/susie/spr_susie_walk_right_look_down_dw_2.png',
                     './personajes/susie/spr_susie_walk_right_look_down_dw_3.png'
                 ],
-                w: 64 * 1.3, h: 72 * 1.3
+                attack: [
+                    './personajes/susie_ataque/spr_susieb_attackready_0.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_0.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_1.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_2.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_3.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_4.png',
+                    './personajes/susie_ataque/spr_susieb_attack_serious_5.png'
+                ],
+                w: 64 * 1.3, h: 72 * 1.3,
+                attackW: 64 * 2.8, attackH: 72 * 2.8
             },
             ralsei: {
-                paths: [
+                walk: [
                     './personajes/ralsei/spr_ralsei_surprised_right_walk_0.png',
                     './personajes/ralsei/spr_ralsei_surprised_right_walk_1.png',
                     './personajes/ralsei/spr_ralsei_surprised_right_walk_2.png',
                     './personajes/ralsei/spr_ralsei_surprised_right_walk_3.png'
                 ],
-                w: 48 * 1.3, h: 60 * 1.3
+                attack: [
+                    './personajes/ralsei_ataque/spr_ralsei_attackready_0.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_0.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_1.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_2.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_3.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_4.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_5.png',
+                    './personajes/ralsei_ataque/spr_ralsei_attack_6.png'
+                ],
+                w: 48 * 1.3, h: 60 * 1.3,
+                attackW: 48 * 4, attackH: 60 * 1.7
             }
         };
         let selectedChar = 'kris';
         let playerSprites = [];
+        let playerAttackSprites = [];
 
         const obstacleAssets = {
             rock1: { src: './objetos/piedra/roca.jpg', img: null, w: 40 * 1.4, h: 40 * 1.4 },
@@ -238,6 +308,29 @@
                 ],
                 sprites: [], w: 32 * 1.4, h: 32 * 1.4
             },
+            sapo: {
+                paths: [
+                    './enemigos/sapo/spr_ribbick_Idle_0.png',
+                    './enemigos/sapo/spr_ribbick_Idle_1.png',
+                    './enemigos/sapo/spr_ribbick_Idle_2.png'
+                ],
+                sprites: [], w: 48 * 1.4, h: 48 * 1.4,
+                type: 'enemy',
+                states: {
+                    normal: [
+                        './enemigos/sapo/spr_ribbick_Idle_0.png',
+                        './enemigos/sapo/spr_ribbick_Idle_1.png',
+                        './enemigos/sapo/spr_ribbick_Idle_2.png'
+                    ],
+                    alert: [
+                        './enemigos/sapo/sapo_te_vio/spr_ribbick_hurt2_0.png',
+                        './enemigos/sapo/sapo_te_vio/spr_ribbick_hurt2_1.png'
+                    ],
+                    death: [
+                        './enemigos/sapo/muerte_sapo/spr_ribbick_hurt_0.png'
+                    ]
+                }
+            },
         };
 
         function checkAllAssetsLoaded() {
@@ -251,25 +344,47 @@
         function preloadAssets() {
             assetsLoaded = 0;
             playerSprites = [];
-            const spritePaths = characters[selectedChar].paths;
+            playerAttackSprites = [];
+            const charData = characters[selectedChar];
+            const walkPaths = charData.walk;
+            const attackPaths = charData.attack;
             
-            totalAssets = spritePaths.filter(p => p !== '').length;
+            totalAssets = walkPaths.filter(p => p !== '').length + attackPaths.filter(p => p !== '').length;
             for (const key in obstacleAssets) {
                 if (obstacleAssets[key].paths) {
                     totalAssets += obstacleAssets[key].paths.filter(p => p !== '').length;
-                } else if (obstacleAssets[key].src !== '') {
+                }
+                // Contar sprites de estados para enemigos
+                if (obstacleAssets[key].states) {
+                    for (const state in obstacleAssets[key].states) {
+                        totalAssets += obstacleAssets[key].states[state].filter(p => p !== '').length;
+                    }
+                }
+                if (obstacleAssets[key].src && obstacleAssets[key].src !== '') {
                     totalAssets++;
                 }
             }
 
-            if (spritePaths.length === 0) { loadingText.textContent = "Sprites no definidos."; return; }
-            spritePaths.forEach((src) => {
+            if (walkPaths.length === 0) { loadingText.textContent = "Sprites no definidos."; return; }
+            
+            // Cargar sprites de caminar
+            walkPaths.forEach((src) => {
                 if(src === '') return;
                 const img = new Image();
                 img.onload = checkAllAssetsLoaded;
                 img.onerror = () => { loadingText.textContent = `Error: ${src}`; };
                 img.src = src;
                 playerSprites.push(img);
+            });
+            
+            // Cargar sprites de ataque
+            attackPaths.forEach((src) => {
+                if(src === '') return;
+                const img = new Image();
+                img.onload = checkAllAssetsLoaded;
+                img.onerror = () => { loadingText.textContent = `Error: ${src}`; };
+                img.src = src;
+                playerAttackSprites.push(img);
             });
 
             for (const key in obstacleAssets) {
@@ -284,8 +399,21 @@
                         img.src = path;
                         asset.sprites.push(img);
                     });
-                } else {
-                    if (asset.src === '') continue;
+                }
+                // Cargar sprites de estados para enemigos (como sapo)
+                if (asset.states) {
+                    for (const state in asset.states) {
+                        asset.states[state] = asset.states[state].map(path => {
+                            if (path === '') return null;
+                            const img = new Image();
+                            img.onload = checkAllAssetsLoaded;
+                            img.onerror = () => { loadingText.textContent = `Error: ${path}`; };
+                            img.src = path;
+                            return img;
+                        }).filter(img => img !== null);
+                    }
+                }
+                if (asset.src && asset.src !== '') {
                     asset.img = new Image();
                     asset.img.onload = checkAllAssetsLoaded;
                     asset.img.onerror = () => { loadingText.textContent = `Error: ${asset.src}`; };
@@ -297,6 +425,13 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            
+            // Optimización para sprites pixelados
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.mozImageSmoothingEnabled = false;
+            ctx.msImageSmoothingEnabled = false;
+            ctx.oImageSmoothingEnabled = false;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -307,6 +442,7 @@
                 this.dy = 0; this.jumpForce = 18; this.grounded = false;
                 this.currentFrame = 0; this.animationSpeed = 6; this.frameCount = 0;
                 this.hitboxPadding = { x: this.w * 0.2, y: this.h * 0.1 };
+                this.attackHitbox = { x: 0, y: 0, w: this.w * 1.5, h: this.h };
             }
             animate() {
                 this.frameCount++;
@@ -317,8 +453,43 @@
                 }
             }
             draw() {
-                if (playerSprites.length > 0 && playerSprites[this.currentFrame]?.complete) {
-                    ctx.drawImage(playerSprites[this.currentFrame], this.x, this.y, this.w, this.h);
+                let currentSprites = playerSprites;
+                let spriteIndex = this.currentFrame;
+                let renderWidth = this.w;
+                let renderHeight = this.h;
+                let renderY = this.y;
+                
+                if (isAttacking && playerAttackSprites.length > 0) {
+                    // Usar sprites de ataque durante la animación
+                    currentSprites = playerAttackSprites;
+                    spriteIndex = Math.floor(attackAnimationFrame);
+                    if (spriteIndex >= currentSprites.length) {
+                        spriteIndex = currentSprites.length - 1;
+                    }
+                    // Usar tamaños independientes para sprites de ataque
+                    const charData = characters[selectedChar];
+                    renderWidth = charData.attackW;
+                    renderHeight = charData.attackH;
+                    
+                    // Ajustar posición Y para que el sprite aparezca más arriba pero permita saltos visibles
+                    const baseGroundY = canvas.height - 40;
+                    let offsetY = renderHeight - charData.h; // Diferencia de altura entre sprites
+                    
+                    // Ajuste específico para Kris para corregir su posición al atacar
+                    if (selectedChar === 'kris') {
+                        offsetY = offsetY * 0.7; // Reducir el offset para Kris
+                    }
+                    
+                    renderY = this.y - offsetY;
+                }
+                
+                if (currentSprites.length > 0 && currentSprites[spriteIndex]?.complete) {
+                    // Renderizado optimizado para sprites pixelados
+                    const img = currentSprites[spriteIndex];
+                    ctx.drawImage(img, 
+                        Math.floor(this.x), Math.floor(renderY), 
+                        Math.floor(renderWidth), Math.floor(renderHeight)
+                    );
                 }
             }
             jump() { if (this.grounded) { this.dy = -this.jumpForce; this.grounded = false; } }
@@ -329,7 +500,14 @@
                 if (this.y + this.h >= canvas.height - 40) {
                     this.y = canvas.height - this.h - 40; this.dy = 0; this.grounded = true;
                 }
+                
+                // Actualizar hitbox de ataque
+                this.attackHitbox.x = this.x + this.w;
+                this.attackHitbox.y = this.y;
+                
                 this.draw();
+                
+                // Hitbox de ataque removido para mejor experiencia visual
             }
         }
 
@@ -346,7 +524,7 @@
                 this.hitboxPadding = { x: this.w * 0.15, y: this.h * 0.15 };
             }
             animate() {
-                if (!this.isAnimated) return;
+                if (!this.isAnimated || !this.sprites || !this.sprites.length) return;
                 this.frameCount++;
                 if (this.frameCount > this.animationSpeed) {
                     this.frameCount = 0;
@@ -354,23 +532,107 @@
                 }
             }
             draw() {
-                const imageToDraw = this.isAnimated ? this.sprites[this.currentFrame] : this.asset;
+                const imageToDraw = this.isAnimated && this.sprites ? this.sprites[this.currentFrame] : this.asset;
                 if (imageToDraw && imageToDraw.complete) {
-                    ctx.drawImage(imageToDraw, this.x, this.y, this.w, this.h);
+                    // Renderizado optimizado para sprites pixelados
+                    ctx.drawImage(imageToDraw, 
+                        Math.floor(this.x), Math.floor(this.y), 
+                        Math.floor(this.w), Math.floor(this.h)
+                    );
                 }
             }
             update() {
                 this.x -= gameSpeed;
                 if (this.type === 'falling') { this.y += this.dy; }
+                
+                // Lógica específica para enemigos
+                if (this.type === 'enemy' && this.enemyType === 'sapo' && !this.isDead) {
+                    this.updateEnemyBehavior();
+                }
+                
                 if (this.isAnimated) { this.animate(); }
                 this.draw();
+            }
+            
+            updateEnemyBehavior() {
+                // Calcular distancia al jugador
+                const distanceToPlayer = Math.abs(this.x - player.x);
+                
+                // Cambiar estado según la distancia
+                if (distanceToPlayer <= this.detectionRange && !this.isAlerted) {
+                    this.enemyState = 'alert';
+                    this.isAlerted = true;
+                    this.animationFrame = 0;
+                    this.animationTime = 0;
+                }
+                
+                // Actualizar sprites según el estado
+                this.updateEnemySprites();
+            }
+            
+            updateEnemySprites() {
+                const assetData = obstacleAssets[this.enemyType];
+                
+                // Verificar que assetData y states existen
+                if (!assetData || !assetData.states) {
+                    return;
+                }
+                
+                if (this.isDead) {
+                    this.sprites = assetData.states.death;
+                } else if (this.enemyState === 'alert') {
+                    this.sprites = assetData.states.alert;
+                } else {
+                    this.sprites = assetData.states.normal;
+                }
+                
+                // Asegurar que currentFrame esté dentro del rango
+                if (this.sprites && this.currentFrame >= this.sprites.length) {
+                    this.currentFrame = 0;
+                }
             }
         }
 
         function spawnObstacle() {
+            // Probabilidad de generar una pared obligatoria (15%)
+            const shouldSpawnWall = Math.random() < 0.15;
+            
+            if (shouldSpawnWall) {
+                spawnWallRock();
+            } else {
+                spawnNormalObstacle();
+            }
+        }
+        
+        function spawnWallRock() {
+            // Crear una pared de rocas que bloquea completamente el paso
+            const rockAsset = obstacleAssets.rock1.img;
+            const rockWidth = obstacleAssets.rock1.w;
+            const rockHeight = obstacleAssets.rock1.h;
+            
+            // Crear rocas desde el suelo hasta cierta altura, dejando un espacio que requiere salto + ataque
+            const wallHeight = canvas.height - 40 - 100; // Dejar espacio arriba para saltar
+            const rocksInWall = Math.ceil(wallHeight / rockHeight);
+            
+            for (let i = 0; i < rocksInWall; i++) {
+                const y = canvas.height - 40 - (i + 1) * rockHeight;
+                const obstacle = new Obstacle(canvas.width, y, rockWidth, rockHeight, 'wall', rockAsset);
+                obstacle.isWall = true; // Marcar como pared obligatoria
+                obstacles.push(obstacle);
+            }
+            
+            // Calcular próximo spawn con mayor distancia después de una pared
+            const minDistance = Math.max(400, gameSpeed * 8);
+            const maxDistance = Math.max(600, gameSpeed * 12);
+            nextSpawnThreshold = canvas.width - (minDistance + Math.random() * (maxDistance - minDistance));
+        }
+        
+        function spawnNormalObstacle() {
             let availableGround = ['fire'];
             let availableAir = [];
+            let availableEnemies = [];
             if (score > 1000) availableAir.push('rock1', 'rock2');
+            if (score > 1000) availableEnemies.push('sapo');
             
             let fallingProb = 0;
             if (score > 2500 && !hasSpawnedFirstFalling) {
@@ -383,10 +645,13 @@
 
             const spawnFalling = Math.random() < fallingProb;
             const spawnAir = Math.random() < 0.4;
+            const spawnEnemy = score > 1000 ? Math.random() < 0.5 : 0; // 50% probabilidad de enemigo después de 1000 puntos
             let typeKey;
 
             if (spawnFalling) {
                  typeKey = ['falling1', 'falling2'][Math.floor(Math.random() * 2)];
+            } else if (spawnEnemy && availableEnemies.length > 0) {
+                typeKey = availableEnemies[Math.floor(Math.random() * availableEnemies.length)];
             } else if (spawnAir && availableAir.length > 0) {
                 typeKey = availableAir[Math.floor(Math.random() * availableAir.length)];
             } else {
@@ -397,6 +662,7 @@
             const assetData = obstacleAssets[typeKey];
             const isGround = availableGround.includes(typeKey);
             const isAir = availableAir.includes(typeKey);
+            const isEnemy = availableEnemies.includes(typeKey);
 
             if (isGround) {
                 const asset = assetData.sprites;
@@ -413,10 +679,25 @@
                 const charData = characters[selectedChar];
                 const yPos = canvas.height - 40 - charData.h - assetData.h - 15;
                 obstacle = new Obstacle(canvas.width + assetData.w, yPos, assetData.w, assetData.h, 'air', assetData.img);
+            } else if (isEnemy) {
+                // Crear enemigo sapo
+                const asset = assetData.sprites;
+                if (!asset || (Array.isArray(asset) && asset.length === 0)) return;
+                obstacle = new Obstacle(canvas.width + assetData.w, canvas.height - assetData.h - 40, assetData.w, assetData.h, 'enemy', asset);
+                obstacle.enemyType = typeKey;
+                obstacle.enemyState = 'normal';
+                obstacle.animationFrame = 0;
+                obstacle.animationTime = 0;
+                obstacle.detectionRange = 250; // Rango de detección del jugador (aumentado)
+                obstacle.isAlerted = false;
+                obstacle.isDead = false;
             } else { // Falling
                 if (!assetData.img) return;
                 const charData = characters[selectedChar];
-                obstacle = new Obstacle(player.x + 200 + Math.random() * (canvas.width - 300), -charData.h, charData.w, charData.h, 'falling', assetData.img);
+                // Ajustar posición para que caigan más adelante y forzar uso del boost
+                const minDistance = 350; // Distancia mínima más adelante del jugador
+                const maxDistance = 600; // Distancia máxima más adelante del jugador
+                obstacle = new Obstacle(player.x + minDistance + Math.random() * (maxDistance - minDistance), -charData.h, charData.w, charData.h, 'falling', assetData.img);
             }
             if (obstacle) {
                 obstacles.push(obstacle);
@@ -433,9 +714,14 @@
             const charData = characters[selectedChar];
             player = new Player(80, canvas.height - 100, charData.w, charData.h);
             gravity = 1; obstacles = []; gameSpeed = 7; score = 0;
-            isGameOver = false; canBoost = true;
+            isGameOver = false; canBoost = true; canAttack = true;
             nextSpawnThreshold = 0;
             hasSpawnedFirstFalling = false;
+            destroyedObstacles = [];
+            
+            // Inicializar líneas de fondo
+            initBackgroundLines();
+            
             scoreElement.innerText = "0";
             gameOverScreen.style.display = 'none';
             startScreen.style.display = 'none';
@@ -444,17 +730,64 @@
             isPlaying = true;
             requestAnimationFrame(update);
         }
+        
+        function initBackgroundLines() {
+            backgroundLines = [];
+            for (let i = 0; i < 15; i++) {
+                backgroundLines.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    length: Math.random() * 30 + 10,
+                    speed: Math.random() * 2 + 1,
+                    opacity: Math.random() * 0.3 + 0.1
+                });
+            }
+        }
+        
+        function drawBackground() {
+            // Actualizar y dibujar líneas de movimiento
+            ctx.save();
+            backgroundLines.forEach(line => {
+                line.x -= line.speed * (gameSpeed / 5);
+                
+                if (line.x + line.length < 0) {
+                    line.x = canvas.width + Math.random() * 100;
+                    line.y = Math.random() * canvas.height;
+                }
+                
+                ctx.strokeStyle = `rgba(255, 255, 255, ${line.opacity})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(line.x, line.y);
+                ctx.lineTo(line.x + line.length, line.y);
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
 
         function update() {
             if (!isPlaying || isGameOver) return;
             requestAnimationFrame(update);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Dibujar líneas de fondo en movimiento
+            drawBackground();
+
             ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
             ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(0, canvas.height - 40); ctx.lineTo(canvas.width, canvas.height - 40); ctx.stroke();
 
             player.update();
+            
+            // Actualizar animación de ataque
+            if (isAttacking && playerAttackSprites.length > 0) {
+                attackAnimationTime += 16.67; // ~60 FPS
+                const frameRate = attackDuration / playerAttackSprites.length;
+                attackAnimationFrame = Math.floor(attackAnimationTime / frameRate);
+                if (attackAnimationFrame >= playerAttackSprites.length) {
+                    attackAnimationFrame = playerAttackSprites.length - 1;
+                }
+            }
 
             if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < nextSpawnThreshold) {
                 spawnObstacle();
@@ -464,19 +797,51 @@
                 let o = obstacles[i];
                 o.update();
                 
-                const pbox = { x: player.x + player.hitboxPadding.x, y: player.y + player.hitboxPadding.y, w: player.w - 2 * player.hitboxPadding.x, h: player.h - 2 * player.hitboxPadding.y };
-                const obox = { x: o.x + o.hitboxPadding.x, y: o.y + o.hitboxPadding.y, w: o.w - 2 * o.hitboxPadding.x, h: o.h - 2 * o.hitboxPadding.y };
-
-                if (pbox.x < obox.x + obox.w && pbox.x + pbox.w > obox.x &&
-                    pbox.y < obox.y + obox.h && pbox.y + pbox.h > obox.y) {
+                // Sistema de colisiones optimizado
+                // No causar game over si el enemigo está muerto
+                if (checkCollision(player, o) && !(o.type === 'enemy' && o.isDead)) {
                     gameOver();
                 }
                 if (o.x + o.w < 0 || o.y > canvas.height) obstacles.splice(i, 1);
+            }
+            
+            // Verificar colisiones de ataque continuamente durante la animación
+            checkAttackCollisions();
+            
+            // Actualizar notificaciones de puntos
+            updatePointsNotifications();
+            
+            // Renderizar efectos de destrucción
+            for (let i = destroyedObstacles.length - 1; i >= 0; i--) {
+                const effect = destroyedObstacles[i];
+                let allDead = true;
+                
+                for (let j = 0; j < effect.particles.length; j++) {
+                    const p = effect.particles[j];
+                    if (p.life > 0) {
+                        allDead = false;
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.3; // Gravedad en partículas
+                        p.life--;
+                        
+                        // Dibujar partícula
+                        ctx.fillStyle = `rgba(255, 100, 0, ${p.life / 30})`;
+                        ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 3, 3);
+                    }
+                }
+                
+                if (allDead) {
+                    destroyedObstacles.splice(i, 1);
+                }
             }
 
             score += Math.floor(gameSpeed / 6);
             scoreElement.innerText = score;
             if (score % 200 === 0 && score > 0) gameSpeed += 0.2;
+            
+            // Dibujar notificaciones de puntos
+            drawPointsNotifications();
         }
 
         function gameOver() {
@@ -495,12 +860,197 @@
             setTimeout(() => { isBoosting = false; gameSpeed = originalSpeed; }, boostDuration);
             setTimeout(() => { canBoost = true; boostBtn.classList.remove('cooldown'); }, boostCooldown);
         }
+        
+        function activateAttack() {
+            if (!canAttack || !isPlaying) return;
+            isAttacking = true; canAttack = false;
+            attackAnimationFrame = 0;
+            attackAnimationTime = 0;
+            attackBtn.classList.add('cooldown');
+            
+            // La animación durará 1.5 segundos
+            setTimeout(() => { 
+                isAttacking = false;
+                attackAnimationFrame = 0;
+                attackAnimationTime = 0;
+            }, attackDuration);
+            
+            setTimeout(() => { canAttack = true; attackBtn.classList.remove('cooldown'); }, attackCooldown);
+        }
+        
+        // Nueva función para verificar colisiones de ataque continuamente
+        function checkAttackCollisions() {
+            if (!isAttacking) return;
+            
+            // Verificar colisiones con rocas y enemigos durante toda la animación de ataque
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                
+                // Verificar colisión con enemigos
+                if (obstacle.type === 'enemy' && !obstacle.isDead) {
+                    const attackBox = player.attackHitbox;
+                    const obstacleBox = { x: obstacle.x, y: obstacle.y, w: obstacle.w, h: obstacle.h };
+                    
+                    if (checkCollision({ x: attackBox.x, y: attackBox.y, w: attackBox.w, h: attackBox.h, hitboxPadding: { x: 0, y: 0 } }, obstacle)) {
+                        // Matar enemigo
+                        obstacle.isDead = true;
+                        obstacle.enemyState = 'death';
+                        obstacle.currentFrame = 0;
+                        
+                        // Puntos extra por matar sapo
+                        if (obstacle.enemyType === 'sapo') {
+                            score += 200;
+                            showPointsNotification('+200', obstacle.x + obstacle.w/2, obstacle.y);
+                        }
+                        
+                        // Crear efecto de partículas
+                        createDestroyEffect(obstacleBox.x + obstacleBox.w/2, obstacleBox.y + obstacleBox.h/2);
+                        
+                        // Remover enemigo después de un tiempo
+                        setTimeout(() => {
+                            const index = obstacles.indexOf(obstacle);
+                            if (index > -1) obstacles.splice(index, 1);
+                        }, 1000);
+                    }
+                }
+                // Solo destruir rocas usando función auxiliar
+                else if (isDestructible(obstacle)) {
+                    const attackBox = player.attackHitbox;
+                    const obstacleBox = { x: obstacle.x, y: obstacle.y, w: obstacle.w, h: obstacle.h };
+                    
+                    // Verificar colisión usando función optimizada
+                    if (checkCollision({ x: attackBox.x, y: attackBox.y, w: attackBox.w, h: attackBox.h, hitboxPadding: { x: 0, y: 0 } }, obstacle)) {
+                        // Destruir la roca
+                        obstacles.splice(i, 1);
+                        score += 50; // Bonus por destruir roca
+                        
+                        // Crear efecto de partículas
+                        createDestroyEffect(obstacleBox.x + obstacleBox.w/2, obstacleBox.y + obstacleBox.h/2);
+                    }
+                }
+            }
+        }
+        
+        function createDestroyEffect(x, y) {
+            // Efecto visual simple de destrucción
+            const particles = [];
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 30
+                });
+            }
+            destroyedObstacles.push({ particles, time: Date.now() });
+        }
+        
+        // Sistema de notificaciones de puntos
+        let pointsNotifications = [];
+        
+        function showPointsNotification(text, x, y) {
+            pointsNotifications.push({
+                text: text,
+                x: x,
+                y: y,
+                life: 60, // Duración en frames
+                opacity: 1
+            });
+        }
+        
+        function updatePointsNotifications() {
+            for (let i = pointsNotifications.length - 1; i >= 0; i--) {
+                const notification = pointsNotifications[i];
+                notification.y -= 2; // Mover hacia arriba
+                notification.life--;
+                notification.opacity = notification.life / 60;
+                
+                if (notification.life <= 0) {
+                    pointsNotifications.splice(i, 1);
+                }
+            }
+        }
+        
+        function drawPointsNotifications() {
+            ctx.save();
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            
+            for (const notification of pointsNotifications) {
+                ctx.globalAlpha = notification.opacity;
+                ctx.fillStyle = '#FFD700'; // Color dorado
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                
+                // Dibujar texto con borde
+                ctx.strokeText(notification.text, notification.x, notification.y);
+                ctx.fillText(notification.text, notification.x, notification.y);
+            }
+            
+            ctx.restore();
+        }
+        
+        // Sistema de colisiones optimizado
+        function checkCollision(obj1, obj2) {
+            const box1 = getHitbox(obj1);
+            const box2 = getHitbox(obj2);
+            
+            return box1.x < box2.x + box2.w && 
+                   box1.x + box1.w > box2.x &&
+                   box1.y < box2.y + box2.h && 
+                   box1.y + box1.h > box2.y;
+        }
+        
+        function getHitbox(obj) {
+            const padding = obj.hitboxPadding || { x: 0, y: 0 };
+            return {
+                x: obj.x + padding.x,
+                y: obj.y + padding.y,
+                w: obj.w - 2 * padding.x,
+                h: obj.h - 2 * padding.y
+            };
+        }
+        
+        // Función para verificar si un obstáculo es destructible
+        function isDestructible(obstacle) {
+            // Verificar si es una roca por tipo o por asset
+            if (obstacle.isWall) return true;
+            if (obstacle.type === 'wall') return true;
+            
+            // Verificar si es una roca de aire (rock1, rock2)
+            if (obstacle.type === 'air') {
+                return true; // Las rocas de aire son destructibles
+            }
+            
+            // Verificar si el asset es una roca
+            if (obstacle.asset) {
+                if (obstacle.asset.src && (obstacle.asset.src.includes('rock') || obstacle.asset.src.includes('roca'))) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
 
         function saveHighScore(name, newScore) {
             const highScores = JSON.parse(localStorage.getItem('holomindHighScores')) || [];
-            highScores.push({ name, score: newScore });
+            
+            // Buscar si el jugador ya existe
+            const existingPlayerIndex = highScores.findIndex(player => player.name === name);
+            
+            if (existingPlayerIndex !== -1) {
+                // Si existe, actualizar solo si el nuevo puntaje es mayor
+                if (newScore > highScores[existingPlayerIndex].score) {
+                    highScores[existingPlayerIndex].score = newScore;
+                }
+            } else {
+                // Si no existe, agregar nuevo jugador
+                highScores.push({ name, score: newScore });
+            }
+            
+            // Ordenar por puntaje descendente y mantener solo los primeros 6
             highScores.sort((a, b) => b.score - a.score);
-            localStorage.setItem('holomindHighScores', JSON.stringify(highScores.slice(0, 10)));
+            localStorage.setItem('holomindHighScores', JSON.stringify(highScores.slice(0, 6)));
         }
 
         function displayHighScores() {
@@ -532,6 +1082,7 @@
              if (!isPlaying && !isGameOver) { init(); return; }
              if (type === 'jump') player.jump();
              if (type === 'boost') activateBoost();
+             if (type === 'attack') activateAttack();
         }
 
         document.addEventListener('keydown', (e) => {
@@ -543,6 +1094,7 @@
                 }
             }
             if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') handleInput('boost');
+            if (e.code === 'KeyX' || e.code === 'KeyZ') handleInput('attack');
         });
 
         jumpBtn.addEventListener('click', () => {
@@ -553,6 +1105,7 @@
             }
         });
         boostBtn.addEventListener('click', () => handleInput('boost'));
+        attackBtn.addEventListener('click', () => handleInput('attack'));
         startScreen.addEventListener('mousedown', () => handleInput('jump'));
         
         playAgainBtn.addEventListener('click', () => {
