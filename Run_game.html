@@ -214,11 +214,11 @@
 
         let player, gravity, obstacles, gameSpeed, score;
         let isPlaying = false, isGameOver = false, assetsLoaded = 0, totalAssets = 0;
-        let isBoosting = false, boostCooldown = 3000, boostDuration = 1000, canBoost = true;
-        let isAttacking = false, attackCooldown = 1400, canAttack = true, attackRange = 80;
+        let isBoosting = false, boostCooldown = 2800, boostDuration = 1000, canBoost = true;
+        let isAttacking = false, attackCooldown = 700, canAttack = true, attackRange = 80;
         let attackAnimationFrame = 0;
         let attackAnimationTime = 0;
-        let attackDuration = 1000; // 1 segundo
+        let attackDuration = 650; // 1 segundo
         let playerName = "AAA";
         let nextSpawnThreshold = 0;
         let hasSpawnedFirstFalling = false;
@@ -247,7 +247,7 @@
                     './personajes/kris_ataque/spr_krisb_attack_6.png'
                 ],
                 w: 48 * 1.3, h: 64 * 1.3,
-                attackW: 48 * 2.8, attackH: 64 * 2.8
+                attackW: 60 * 2.3, attackH: 58 * 2.3
             },
             susie: {
                 walk: [
@@ -266,7 +266,7 @@
                     './personajes/susie_ataque/spr_susieb_attack_serious_5.png'
                 ],
                 w: 64 * 1.3, h: 72 * 1.3,
-                attackW: 64 * 2.8, attackH: 72 * 2.8
+                attackW: 80 * 2.8, attackH: 75 * 2.8
             },
             ralsei: {
                 walk: [
@@ -330,6 +330,20 @@
                         './enemigos/sapo/muerte_sapo/spr_ribbick_hurt_0.png'
                     ]
                 }
+            },
+            pipins: {
+                paths: [
+                    './amigos/pipins/spr_pippins_idle2_0.png',
+                    './amigos/pipins/spr_pippins_idle2_1.png',
+                    './amigos/pipins/spr_pippins_idle2_2.png',
+                    './amigos/pipins/spr_pippins_idle2_3.png',
+                    './amigos/pipins/spr_pippins_idle2_4.png',
+                    './amigos/pipins/spr_pippins_idle2_5.png',
+                    './amigos/pipins/spr_pippins_idle2_6.png',
+                    './amigos/pipins/spr_pippins_idle2_7.png'
+                ],
+                sprites: [], w: 48 * 2, h: 48 * 2,
+                type: 'friend'
             },
         };
 
@@ -631,25 +645,32 @@
             let availableGround = ['fire'];
             let availableAir = [];
             let availableEnemies = [];
+            let availableFriends = [];
             if (score > 1000) availableAir.push('rock1', 'rock2');
             if (score > 1000) availableEnemies.push('sapo');
+            if (score > 500) availableFriends.push('pipins');
             
             let fallingProb = 0;
             if (score > 2500 && !hasSpawnedFirstFalling) {
                 fallingProb = 1; // 100% de probabilidad la primera vez
                 hasSpawnedFirstFalling = true;
             } else if (score > 2500) {
-                fallingProb = 0.01 + ((score - 2500) / 20000); 
-                if (fallingProb > 0.1) fallingProb = 0.1;
+                // Aumentar frecuencia progresivamente después de 2500 puntos
+                fallingProb = 0.02 + ((score - 2500) / 10000); 
+                if (fallingProb > 0.25) fallingProb = 0.25; // Máximo 25%
             }
 
             const spawnFalling = Math.random() < fallingProb;
             const spawnAir = Math.random() < 0.4;
-            const spawnEnemy = score > 1000 ? Math.random() < 0.5 : 0; // 50% probabilidad de enemigo después de 1000 puntos
+            const spawnEnemy = score > 1000 ? Math.random() < 0.4 : 0; // 40% probabilidad de enemigo
+            const spawnFriend = score > 500 ? Math.random() < 0.15 : 0; // 15% probabilidad de amigo
             let typeKey;
 
             if (spawnFalling) {
+                 // Posición aleatoria en X para objetos que caen
                  typeKey = ['falling1', 'falling2'][Math.floor(Math.random() * 2)];
+            } else if (spawnFriend && availableFriends.length > 0) {
+                typeKey = availableFriends[Math.floor(Math.random() * availableFriends.length)];
             } else if (spawnEnemy && availableEnemies.length > 0) {
                 typeKey = availableEnemies[Math.floor(Math.random() * availableEnemies.length)];
             } else if (spawnAir && availableAir.length > 0) {
@@ -663,6 +684,7 @@
             const isGround = availableGround.includes(typeKey);
             const isAir = availableAir.includes(typeKey);
             const isEnemy = availableEnemies.includes(typeKey);
+            const isFriend = availableFriends.includes(typeKey);
 
             if (isGround) {
                 const asset = assetData.sprites;
@@ -691,13 +713,19 @@
                 obstacle.detectionRange = 250; // Rango de detección del jugador (aumentado)
                 obstacle.isAlerted = false;
                 obstacle.isDead = false;
+            } else if (isFriend) {
+                // Crear amigo pipins
+                const asset = assetData.sprites;
+                if (!asset || (Array.isArray(asset) && asset.length === 0)) return;
+                obstacle = new Obstacle(canvas.width + assetData.w, canvas.height - assetData.h - 40, assetData.w, assetData.h, 'friend', asset);
+                obstacle.friendType = typeKey;
             } else { // Falling
                 if (!assetData.img) return;
                 const charData = characters[selectedChar];
-                // Ajustar posición para que caigan más adelante y forzar uso del boost
-                const minDistance = 350; // Distancia mínima más adelante del jugador
-                const maxDistance = 600; // Distancia máxima más adelante del jugador
-                obstacle = new Obstacle(player.x + minDistance + Math.random() * (maxDistance - minDistance), -charData.h, charData.w, charData.h, 'falling', assetData.img);
+                // Posición más aleatoria en X para objetos que caen (pueden aparecer adelante o atrás)
+                const randomX = Math.random() * (canvas.width + 400) - 200; // Permite spawn fuera del canvas
+                const randomY = -assetData.h - Math.random() * 100; // Altura variable de spawn
+                obstacle = new Obstacle(randomX, randomY, assetData.w, assetData.h, 'falling', assetData.img);
             }
             if (obstacle) {
                 obstacles.push(obstacle);
@@ -798,8 +826,8 @@
                 o.update();
                 
                 // Sistema de colisiones optimizado
-                // No causar game over si el enemigo está muerto
-                if (checkCollision(player, o) && !(o.type === 'enemy' && o.isDead)) {
+                // No causar game over si el enemigo está muerto o si es un amigo
+                if (checkCollision(player, o) && !(o.type === 'enemy' && o.isDead) && o.type !== 'friend') {
                     gameOver();
                 }
                 if (o.x + o.w < 0 || o.y > canvas.height) obstacles.splice(i, 1);
@@ -897,6 +925,9 @@
                         obstacle.enemyState = 'death';
                         obstacle.currentFrame = 0;
                         
+                        // Actualizar sprites inmediatamente para mostrar muerte
+                        obstacle.updateEnemySprites();
+                        
                         // Puntos extra por matar sapo
                         if (obstacle.enemyType === 'sapo') {
                             score += 200;
@@ -911,6 +942,25 @@
                             const index = obstacles.indexOf(obstacle);
                             if (index > -1) obstacles.splice(index, 1);
                         }, 1000);
+                    }
+                }
+                // Verificar colisión con amigos (pipins)
+                else if (obstacle.type === 'friend') {
+                    const attackBox = player.attackHitbox;
+                    const obstacleBox = { x: obstacle.x, y: obstacle.y, w: obstacle.w, h: obstacle.h };
+                    
+                    if (checkCollision({ x: attackBox.x, y: attackBox.y, w: attackBox.w, h: attackBox.h, hitboxPadding: { x: 0, y: 0 } }, obstacle)) {
+                        // Restar puntos por atacar amigo
+                        if (obstacle.friendType === 'pipins') {
+                            score -= 500;
+                            showPointsNotification('-500', obstacle.x + obstacle.w/2, obstacle.y);
+                        }
+                        
+                        // Crear efecto de partículas
+                        createDestroyEffect(obstacleBox.x + obstacleBox.w/2, obstacleBox.y + obstacleBox.h/2);
+                        
+                        // Remover amigo inmediatamente
+                        obstacles.splice(i, 1);
                     }
                 }
                 // Solo destruir rocas usando función auxiliar
